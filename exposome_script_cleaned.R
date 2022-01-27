@@ -1,27 +1,30 @@
+##########ANALYSIS OF THE EFFECTS OF PESTICIDE EXPOSURE ON THE GUT MICROBIOME OF DAG3 PARTICIPANTS
+####### Last updated: 26 Jan 2022
+####### Created by: Milla Gois 
+###expected output: (3) plots of age/sex/employment distribution, (1) pdf with plot of alpha diversity 
+
+#Load packages and input files: 
 set.seed(123)
 library(dplyr)
 library(ggplot2)
 
 phenos <- read.table("/groups/umcg-lifelines/tmp01/projects/dag3_fecal_mgs/umcg-rgacesa/DAG3_data_ready/phenotypes/DAG3_metadata_merged_ready_v27.csv", sep=",", fill =T, header =T)
-
 #work questionnaires - LL
 work2 <- read.table("/groups/umcg-lifelines/tmp01/releases/pheno_lifelines/v1/tab_separated_labels/Questionnaire_Work.dat", sep="\t", fill =T, header =T)
 #Pesticide data upload:
 final_pesticide_dag3 <- read.table("/groups/umcg-lifelines/tmp01/users/umcg-mgois/exposome_project/pesticide_exposure_DAG3.txt", fill = T, header = T, sep = "\t")
-
 #ids - DAG3
 ids <- read.table("/groups/umcg-lifelines/tmp01/projects/dag3_fecal_mgs/umcg-rgacesa/DAG3_data_ready/dag3_lld_linkage_files/pairing_files/PSEUDOIDEXT.dat", sep="\t", fill =T, header =T)
-
 #bacterial dag3 metaphlan3
 DAG3_metaphlan <- read.table("/groups/umcg-lifelines/tmp01/users/umcg-mgois/exposome_project/metaphlan3_pseudoids.txt", sep="\t", header =T)
-
+#paticipants linkage file
 participants <- read.table("/groups/umcg-lifelines/tmp01/projects/dag3_fecal_mgs/umcg-rgacesa/DAG3_data_ready/microbiome/QC/key_DAG3_pID.tsv", fill = T, header =T, sep ="\t")
 
 #prepare IDs df:
 DAG3.ids <- ids
 
-#transformation
-##transformation microbiome data
+##CLR transformation function
+
 library(data.table)
 do_clr_externalWeighting = function(interest_matrix, core_matrix){
         if(any(interest_matrix==0)) interest_matrix = interest_matrix + min(interest_matrix[interest_matrix>0])/2
@@ -46,7 +49,7 @@ do_clr_externalWeighting = function(interest_matrix, core_matrix){
 ##removed participant PSEUDOIDEXT == 30421653 because had two entries in "participants" 
 DAG3_metaphlan <- DAG3_metaphlan[!DAG3_metaphlan$PSEUDOIDEXT == 30421653, ]
 
-
+#Prepare data for CLR transformation and run the function:
 DAG3_metaphlan_final <- DAG3_metaphlan
 DAG3_metaphlan <- DAG3_metaphlan[,-1]
 rownames(DAG3_metaphlan) <- DAG3_metaphlan$PSEUDOIDEXT
@@ -57,13 +60,12 @@ taxa_transformed = taxa_transformed[,colSums(DAG3_metaphlan>0)>nrow(DAG3_metaphl
 
 dag3_taxa_transf <- taxa_transformed
 
+#subset the microbiome data for which we also have pesticide data: 
 common_DAG3 <- intersect(final_pesticide_dag3$PSEUDOIDEXT, DAG3_metaphlan_final$PSEUDOIDEXT)
-
-#subset for the samples we also have fecal microbiome 
 dag3_metaphlan_exposure <- final_pesticide_dag3[final_pesticide_dag3$PSEUDOIDEXT %in% common_DAG3, ]
 
 
-#merging the phenos 
+#merging the phenos into one df: 
 phenos_new <- merge(participants, phenos, by="DAG3_sampleID")
 phenos_new <- phenos_new[,-1]
 phenos_new <- phenos_new[phenos_new$PSEUDOIDEXT %in% dag3_metaphlan_exposure$PSEUDOIDEXT,]
@@ -87,6 +89,7 @@ ggplot(age_sex_dag3, aes(x= ANTHRO.AGE, fill = ANTHRO.Sex)) +
 
 dev.off()
 
+#create age groups to plot better: 
 age_sex_dag3 <- age_sex_dag3 %>%
         mutate(age_groups = case_when(
                 ANTHRO.AGE %in% c(20:30) ~ "20-30",
@@ -104,7 +107,7 @@ age_M_dag3 <- age_sex_dag3[age_sex_dag3$ANTHRO.Sex == "M",]
 age_F_dag3 <- age_sex_dag3[age_sex_dag3$ANTHRO.Sex == "F",]
 
 
-
+#plot age-sex distribution for age group: 
 png("age_sex_distribution2_dag3.png")
 
 gg <- ggplot(age_sex_dag3, aes(x= age_groups))
@@ -144,12 +147,11 @@ grid.arrange (gg.female, gg.male,
               ncol=2)
 dev.off()
 
-#checking which questions we have in each assessment: 
+
+#Checking work-related questionnaires, to get time of employment per occupational code: 
 work_dag3 <- work2[work2$PSEUDOIDEXT %in% dag3_metaphlan_exposure$PSEUDOIDEXT,]
 work_dag3_backup <- work_dag3
 work_dag3$WORK8 <- as.factor(work_dag3$WORK8)
-
-
 
 questionnaires <- c("Baseline assessment (1A)", "Second assessment (2A)")
 work_1a_2a<- work_dag3[work_dag3$ENCOUNTERCODE %in% questionnaires,]
@@ -166,17 +168,16 @@ work_2a[sapply(work_2a, is.character)] <- lapply(work_2a[sapply(work_2a, is.char
 work_1a_clean <- work_1a[, !sapply(work_1a, function(col) nlevels(col) ==1)]
 work_2a_clean <- work_2a[, !sapply(work_2a, function(col) nlevels(col) ==1)]
 
-#check the unemployed/not working people: 
-
+#check what is up with the unemployed/not working people: 
+##Here, I managed to trace them back to studying or on leave by their work. I did not add this to this code,
+## because it's rather just exploratory code and relatively long.
 work_1a_unemp <- work_1a_clean[work_1a_clean$WORK8 == " ", ]
 
-#continue the analysis
-
+#continue the analysis by crossing work-related questions:
 questions <- c("PSEUDOIDEXT", "WORK8", "WORK10", "WORK11", "WORK2CA")
 
 work_1a_clean <- work_1a_clean[, which(names(work_1a_clean) %in% questions)]
 work_2a_clean <- work_2a_clean[, which(names(work_2a_clean) %in% questions)]
-
 
 dag3_exposure_work <- merge(dag3_metaphlan_exposure, work_1a_clean, by= "PSEUDOIDEXT")
 levels(dag3_exposure_work$WORK8) [levels(dag3_exposure_work$WORK8) == " "] <- "Unemployed"
@@ -199,6 +200,7 @@ ggplot(dag3_exposure_work, aes(x= WORK8)) +
 
 dev.off()
 
+#Cross time of employment with pesticide exposure levels to get cumulative exposure: 
 dag3_exp_work <- dag3_exposure_work
 
 dag3_exp_work <- dag3_exp_work %>% 
@@ -232,39 +234,31 @@ dag3_exp_work$pest_herbi_cumulative <- dag3_exp_work$pest_herbi.2 * dag3_exp_wor
 dag3_exp_work$pest_insec_cumulative <- dag3_exp_work$pest_insec.2 * dag3_exp_work$work_to_mult
 dag3_exp_work$pest_fungi_cumulative <- dag3_exp_work$pest_fungi.2 * dag3_exp_work$work_to_mult
 
-#inverse rank transformation of the cumulative values: 
-
+###Do inverse rank transformation of the cumulative values: 
 invrank= function(x) {qnorm((rank(x,na.last="keep")-0.5)/sum(!is.na(x)))}
 
 dag3_exp_work[, c("pest_all_cumulative", "pest_herbi_cumulative", "pest_insec_cumulative", "pest_fungi_cumulative")] <- apply(dag3_exp_work[,c("pest_all_cumulative", "pest_herbi_cumulative", "pest_insec_cumulative", "pest_fungi_cumulative")],2, invrank )
 
-
-subset_pest_all <- dag3_exp_work[!dag3_exp_work$pest_all == 0,]
-subset_pest_herbi <- dag3_exp_work[!dag3_exp_work$pest_herbi == 0,]
-subset_pest_insec <- dag3_exp_work[!dag3_exp_work$pest_insec == 0,]
-subset_pest_fungi <- dag3_exp_work[!dag3_exp_work$pest_fungi == 0,]
-
-
-
 dag3_exp_work_final<-dag3_exp_work
 
+#prepare dataframe for alpha diversity calculations
 to_keep <- c("PSEUDOIDEXT", "pest_all", "pest_herbi", "pest_insec", "pest_fungi", 
              "pest_all_cumulative", "pest_herbi_cumulative", "pest_insec_cumulative", "pest_fungi_cumulative")
 dag3_exp_work_final <- dag3_exp_work_final[to_keep]
 
 to_factor <- c("pest_all", "pest_herbi", "pest_insec", "pest_fungi", 
-               "pest_all_cumulative", "pest_herbi_cumulative", "pest_insec_cumulative", "pest_fungi_cumulative")
+             "pest_all_cumulative", "pest_herbi_cumulative", "pest_insec_cumulative", "pest_fungi_cumulative")
 
 dag3_exp_work_final[to_factor] <- lapply(dag3_exp_work_final[to_factor], factor)
 
 
 at_least_dag32 <-dag3_metaphlan_exposure[apply(dag3_metaphlan_exposure[7:10], 1, function(x) any(x>0)),]
 
-##### age & sex distribution among exposed people
+##### for double check: age & sex distribution among exposed people
 age_sex_dag3_exposed <- age_sex_dag3[age_sex_dag3$PSEUDOIDEXT %in% at_least_dag32$PSEUDOIDEXT, ]
 
 
-###alpha diverstity 
+###alpha diverstity calculation: 
 
 library(vegan)
 
@@ -272,7 +266,7 @@ DAG3_metaphlan_exp <- DAG3_metaphlan_final[DAG3_metaphlan_final$PSEUDOIDEXT %in%
 rownames(DAG3_metaphlan_exp) <- DAG3_metaphlan_exp$PSEUDOIDEXT
 DAG3_metaphlan_exp$PSEUDOIDEXT <- NULL
 
-
+#use only spp level: 
 DAG3_metaphlan_exp_spp <- DAG3_metaphlan_exp[,grep("t__", colnames(DAG3_metaphlan_exp), invert = T)]
 DAG3_metaphlan_exp_spp <-DAG3_metaphlan_exp_spp[, grep("s__", colnames(DAG3_metaphlan_exp_spp))]
 colnames(DAG3_metaphlan_exp_spp) = sub(".*[.]s__", "", colnames(DAG3_metaphlan_exp_spp))
@@ -282,14 +276,6 @@ DAG3_metaphlan_exp_spp[, chr_conversion] <- lapply(chr_conversion, function(x) a
 
 DAG3_aD_spp_all <- diversity(DAG3_metaphlan_exp_spp, index = "shannon")
 
-
-
-DAG3_metaphlan_exp_spp_12 <- DAG3_metaphlan_exp_spp[row.names(DAG3_metaphlan_exp_spp) %in% at_least_dag32$PSEUDOIDEXT,]
-DAG3_metaphlan_exp_spp_0 <- DAG3_metaphlan_exp_spp[!row.names(DAG3_metaphlan_exp_spp) %in% at_least_dag32$PSEUDOIDEXT,]
-
-DAG3_aD_spp_12 <- diversity(DAG3_metaphlan_exp_spp_12, index= "shannon")
-DAG3_aD_spp_0 <- diversity (DAG3_metaphlan_exp_spp_0, index = "shannon")
-
 #add alpha diversity to main df 
 dag3_ad_spp_012 <- stack(DAG3_aD_spp_all)
 dag3_ad_spp_012 <- dag3_ad_spp_012 %>% 
@@ -298,15 +284,17 @@ dag3_ad_spp_012 <- dag3_ad_spp_012 %>%
                 PSEUDOIDEXT = ind
         )
 
+#prep for running linear regressions between alpha diversity and pesticide exposure
 dag3_exp_work_final <- merge(dag3_exp_work_final, dag3_ad_spp_012, by = "PSEUDOIDEXT")
-dag3_exp_work_final <- merge(dag3_exp_work_final, age_sex_dag3, bY = "PSEUDOIDEXT")
+dag3_exp_work_final <- merge(dag3_exp_work_final, age_sex_dag3, by = "PSEUDOIDEXT")
 phenos_other <- phenos_new[,c("META.BATCH", "META.POOP.COLLECTION_SEASON", "PSEUDOIDEXT", "META.DNA.postclean.reads")]
 dag3_exp_work_final <- merge(dag3_exp_work_final, phenos_other, by= "PSEUDOIDEXT")
 
-#run the lm first 
 dag3_exp_work_final2 <- dag3_exp_work_final
 dag3_exp_work_final2[,6:9] <- apply(dag3_exp_work_final2[, 6:9], 2, function(x) as.numeric(as.character(x)))
 
+##Here, I ran the linear regressions one by one and separately with/without covariates to compare the results and see whether
+## the model is good (checking the effect estimates of each covariate). 
 #alpha-pesticides lm
 lm_alpha_all_dag3 <- lm(alpha.div.shannon ~  pest_all, data = dag3_exp_work_final)
 lm_alpha_all_cum_dag3 <- lm(alpha.div.shannon ~  pest_all_cumulative, data = dag3_exp_work_final2)
@@ -335,7 +323,7 @@ lm_alpha_fungi_cum_dag3 <- lm(alpha.div.shannon ~  pest_fungi_cumulative, data =
 lm_alpha_fungi_dag3_2 <- lm(alpha.div.shannon ~ ANTHRO.Sex + ANTHRO.AGE + META.POOP.COLLECTION_SEASON +pest_fungi, data = dag3_exp_work_final)
 lm_alpha_fungi_cum_dag3_2 <- lm(alpha.div.shannon ~ ANTHRO.Sex + ANTHRO.AGE + META.POOP.COLLECTION_SEASON +pest_fungi_cumulative, data = dag3_exp_work_final2)
 
-#run kruskal-wallis 
+#run kruskal-wallis and pairwise test to check the results of the lm (here I only did it with one example)
 
 kruskal.test(alpha.div.shannon ~ pest_all, data= dag3_exp_work_final)
 pairwise.wilcox.test(dag3_exp_work_final$alpha.div.shannon, dag3_exp_work_final$pest_all, p.adjust.method = "BH")
@@ -463,32 +451,9 @@ dag3_exp_work_final2 [, c(6:9)] <- sapply(dag3_exp_work_final2 [,c(6:9)], as.num
 
 DAG3_metaphlan_spp_5percent2 <- subset(DAG3_metaphlan_spp_5percent, rownames(DAG3_metaphlan_spp_5percent) %in% dag3_exp_work_final2$PSEUDOIDEXT)
 
-##rewrite from this: 
-results = data.frame()
-
-
-for(i in 1:ncol(DAG3_metaphlan_spp_5percent2)){
-        for(j in 2:9) {
-                lm0 = lm(DAG3_metaphlan_spp_5percent2[,i] ~ dag3_exp_work_final2$ANTHRO.AGE+ dag3_exp_work_final2$ANTHRO.Sex + dag3_exp_work_final2$META.POOP.COLLECTION_SEASON + dag3_exp_work_final2$META.DNA.postclean.reads)
-                lm1 = lm(DAG3_metaphlan_spp_5percent2[,i] ~ dag3_exp_work_final2$ANTHRO.AGE+ dag3_exp_work_final2$ANTHRO.Sex + dag3_exp_work_final2$META.POOP.COLLECTION_SEASON + dag3_exp_work_final2$META.DNA.postclean.reads + dag3_exp_work_final2[,j])
-                summary1 = summary(lm1)
-                summary1$coefficients[8:nrow(summary1$coefficients),1:4]
-                oneReport = data.frame(bac = colnames(DAG3_metaphlan_spp_5percent2)[i],
-                                       pheno = colnames(dag3_exp_work_final2)[j],
-                                       coef1 = summary1$coefficients[8,1],
-                                       SE1 = summary1$coefficients[8,2],
-                                       T1 = summary1$coefficients[8,3],
-                                       P1 = summary1$coefficients[8,4], 
-                                       coef2 = summary1$coefficients[nrow(summary1$coefficients),1],
-                                       SE2 = summary1$coefficients[nrow(summary1$coefficients),2],
-                                       T2 = summary1$coefficients[nrow(summary1$coefficients),3],
-                                       P2 = summary1$coefficients[nrow(summary1$coefficients),4]
-                )
-                results = rbind(results,oneReport)
-        }
-}
-
-
+##Linear regressions between spp present in more than 5 percent of the participants and the exposure levels to each pesticide class
+## after that, I ran an anova test between the linear regression with and without the pesticide exposure variable. 
+## FDR corrected the p-val for those: 
 results = data.frame()
 results_anova = data.frame()
 
