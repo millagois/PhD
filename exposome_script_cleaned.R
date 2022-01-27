@@ -485,33 +485,22 @@ for(i in 1:ncol(DAG3_metaphlan_spp_5percent2)){
                 
         }
 }
+ 
+results_both <- merge(results, results_anova, by=c("bac",  "pheno"))
+                                                     
+results_both$FDR1 = p.adjust(results_both$P1 , method = "BH" )
+results_both$FDR2 = p.adjust(results_both$P2 , method = "BH" )
+results_both$FDR_anova = p.adjust(results_both$P_anova , method = "BH" )
 
-results$FDR1 = p.adjust(results$P1 , method = "BH" )
-results$FDR2 = p.adjust(results$P2 , method = "BH" )
+results_psignf <- results_both[(results_both$P1 <= 0.05 | results_both$P2 <=0.05 | results_both$P_anova <= 0.05),]
+results_psignf2 <- results_both[(results_both$FDR_anova < 0.05 | results_both$FDR1 < 0.05 |results_both$FDR2 < 0.05 ),]
 
-
-results_psignf <- results[(results$P1 < 0.05 | results$P2 <0.05),]
-
-write.table(results_psignf, "taxa_exp_lm_signf.txt", sep = "\t", row.names = T, col.names = T )
+write.table(results_psignf, "taxa_exp_lm_signf_v2.txt", sep = "\t", row.names = T, col.names = T )
 
 signif_bac <- unique(results_psignf$bac)
 
-#double check: 
-test_bacteroides0 <- lm(DAG3_metaphlan_spp_5percent2$Bacteroides_caccae  ~ dag3_exp_work_final2$ANTHRO.AGE+ dag3_exp_work_final2$ANTHRO.Sex + dag3_exp_work_final2$META.POOP.COLLECTION_SEASON + dag3_exp_work_final2$META.DNA.postclean.reads)
-test_bacteroides1 <- lm(DAG3_metaphlan_spp_5percent2$Bacteroides_caccae  ~ dag3_exp_work_final2$ANTHRO.AGE+ dag3_exp_work_final2$ANTHRO.Sex + dag3_exp_work_final2$META.POOP.COLLECTION_SEASON + dag3_exp_work_final2$META.DNA.postclean.reads + dag3_exp_work_final2$pest_insec)
-test_bac_anova <- anova(test_bacteroides1, test_bacteroides0)
 
-test_bifido0 <- lm(DAG3_metaphlan_spp_5percent2$Bifidobacterium_bifidum  ~ dag3_exp_work_final2$ANTHRO.AGE+ dag3_exp_work_final2$ANTHRO.Sex + dag3_exp_work_final2$META.POOP.COLLECTION_SEASON + dag3_exp_work_final2$META.DNA.postclean.reads)
-test_bifido1 <- lm(DAG3_metaphlan_spp_5percent2$Bifidobacterium_bifidum  ~ dag3_exp_work_final2$ANTHRO.AGE+ dag3_exp_work_final2$ANTHRO.Sex + dag3_exp_work_final2$META.POOP.COLLECTION_SEASON + dag3_exp_work_final2$META.DNA.postclean.reads + dag3_exp_work_final2$pest_herbi)
-test_bif_anova <- anova(test_bifido1, test_bifido0)
-summary_test <- summary(test_bif_anova)
-
-pairwise.wilcox.test(DAG3_metaphlan_spp_5percent2$Alistipes_sp_An31A  , dag3_exp_work_final2$pest_herbi, p.adjust.method = "BH")
-kruskal.test(DAG3_metaphlan_spp_5percent2$Alistipes_sp_An31A   ~ dag3_exp_work_final2$pest_herbi)
-
-
-
-####PLOT
+####PLOT --- redo this
 bac_to_plot <- DAG3_metaphlan_spp_5percent2[colnames(DAG3_metaphlan_spp_5percent2) %in% signif_bac]
 bac_to_plot$PSEUDOIDEXT <- rownames(bac_to_plot)
 bac_to_plot <- merge(dag3_exp_work_final2,bac_to_plot, by = "PSEUDOIDEXT")
