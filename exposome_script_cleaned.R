@@ -594,22 +594,22 @@ for(i in 1:ncol(pathways3)){
                 pwy_results = rbind(pwy_results,oneReport)
         }
 }
-pwy_results$FDR1 = p.adjust(pwy_results$P1 , method = "BH" )
-pwy_results$FDR2 = p.adjust(pwy_results$P2 , method = "BH" )
+pwy_results_both <- merge(pwy_results, pwy_results_anova, by =c("PWY", "exp"))
 
-pwy_results_psignf <- pwy_results[(pwy_results$P1 < 0.05 | pwy_results$P2 <0.05),]
+pwy_results_both$FDR1 = p.adjust(pwy_results_both$P1 , method = "BH" )
+pwy_results_both$FDR2 = p.adjust(pwy_results_both$P2 , method = "BH" )
+pwy_results_both$FDR_anova = p.adjust(pwy_results_both$P_anova , method = "BH" )
+
+pwy_results_psignf <- pwy_results_both[(pwy_results_both$P1 <= 0.05 | pwy_results_both$P2 <=0.05 | pwy_results_both$P_anova <=0.05),]
+pwy_results_psignf2 <- pwy_results_both[(pwy_results_both$FDR_anova <= 0.05 | pwy_results_both$FDR1 <= 0.05 | pwy_results_both$FDR2 <= 0.05 ),]
 
 signif_pwy <- unique(pwy_results_psignf$PWY)
 
 signif_pwy_sum <- subset(pathways_sum2, pathways_sum2$PWY %in% signif_pwy)
 
 pwy_results_p2 <- merge(pwy_results_psignf, signif_pwy_sum, by = "PWY")
-pwy_results_p2 <- pwy_results_p2[,-c(14:18)]
-pwy_results_psignf[1:3,c(1:3,5,10)]
-pwy_results_p2[1:3, c(1:3,5,10,16)]
+pwy_results_p2 <- subset(pwy_results_p2, select= -c(N, non0, mean, median, sd, min, max))
 
-"Taxa.with.the.pathway"
-
-write.table(pwy_results_p2, "pwy_exp_lm_signf2.txt", sep = "\t", row.names = T, col.names = T )
+write.table(pwy_results_p2, "pwy_exp_lm_signf_v2.txt", sep = "\t", row.names = T, col.names = T )
 
 signif_pwy <- unique(pwy_results_psignf$PWY)
