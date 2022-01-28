@@ -505,49 +505,6 @@ bac_to_plot <- DAG3_metaphlan_spp_5percent2[colnames(DAG3_metaphlan_spp_5percent
 bac_to_plot$PSEUDOIDEXT <- rownames(bac_to_plot)
 bac_to_plot <- merge(dag3_exp_work_final2,bac_to_plot, by = "PSEUDOIDEXT")
 
-#phenotype - exp correlations: 
-phenos2 <- phenos_new
-phenos2 <- phenos2 %>% mutate_if(is.character, as.factor)
-
-phenos3 <- phenos2[grep("(PSEUDO|ANTHRO|EXP.DIET|MED|META).*", names(phenos2))]
-
-#get binary phenotypes: 
-is_binary <- function(x) (length(unique(x)) == 2)
-binary_pheno <- sapply(phenos3, is_binary)
-binary_pheno <- as.data.frame(binary_pheno)
-binary_pheno$pheno = rownames(binary_pheno)
-binary_pheno <- binary_pheno[binary_pheno$binary_pheno == "TRUE",]
-
-binary_pheno <- phenos3[names(phenos3) %in% binary_pheno$pheno]
-
-#run glm on binary traits and exposure
-
-binary_pheno_results = data.frame()
-
-for(i in 2:ncol(binary_pheno)){
-        for(j in 2:9) {
-                lm1 = glm(binary_pheno[,i] ~ dag3_exp_work_final2$ANTHRO.AGE+ dag3_exp_work_final2$ANTHRO.Sex + dag3_exp_work_final2$META.POOP.COLLECTION_SEASON + dag3_exp_work_final2$META.DNA.postclean.reads + dag3_exp_work_final2[,j], family = binomial())
-                summary1 = summary(lm1)
-                summary1$coefficients[nrow(summary1$coefficients),1:4]
-                oneReport = data.frame(pheno = colnames(binary_pheno)[i],
-                                       exp = colnames(dag3_exp_work_final2)[j],
-                                      coef = summary1$coefficients[nrow(summary1$coefficients),1],
-                                       SE = summary1$coefficients[nrow(summary1$coefficients),2],
-                                       Z = summary1$coefficients[nrow(summary1$coefficients),3],
-                                       P = summary1$coefficients[nrow(summary1$coefficients),4]
-                )
-                binary_pheno_results = rbind(binary_pheno_results,oneReport)
-        }
-}
-binary_pheno_results$FDR = p.adjust(binary_pheno_results$P,method = "BH" )
-binary_pheno_results_signif <- binary_pheno_results[binary_pheno_results$P < 0.05,]
-
-signif_pheno_exp <- unique(binary_pheno_results_signif$pheno)
-
-
-lm1 = glm(binary_pheno$MED.SURGERY.Appendectomy ~ dag3_exp_work_final2$ANTHRO.AGE+ dag3_exp_work_final2$ANTHRO.Sex + dag3_exp_work_final2$META.POOP.COLLECTION_SEASON + dag3_exp_work_final2$META.DNA.postclean.reads + dag3_exp_work_final2$pest_all, family = binomial())
-
-
 ###PATHWAYS: 
 
 pathways <- read.csv(file.path("/groups/umcg-dag3/tmp01/DAG3_biobakery_v3_results_sorted/results_merged/DAG3_humann3_headersfixed_transposed_cleaned_normalized.csv"), header = T, stringsAsFactors = F)
